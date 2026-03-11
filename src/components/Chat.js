@@ -6,6 +6,7 @@ import {
 } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
+import Settings from './Settings';
 
 const CHANNELS = [
   { id: 'general', name: 'general', icon: '💬' },
@@ -137,7 +138,7 @@ export default function Chat({ user }) {
   const messagesEndRef = useRef(null);
   const inputRef       = useRef(null);
   const typingTimeout  = useRef(null);
-  const fileInputRef   = useRef(null);
+
 
   // Apply theme on mount + change
   useEffect(() => {
@@ -337,38 +338,7 @@ export default function Chat({ user }) {
     await updateDoc(doc(db, 'users', user.uid), { status, online: status !== 'offline' });
   }
 
-  async function uploadPhoto(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploadingPhoto(true);
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      // Compress to max 150px
-      const img = new window.Image();
-      img.onload = async () => {
-        const canvas = document.createElement('canvas');
-        const MAX = 150;
-        const scale = Math.min(MAX/img.width, MAX/img.height, 1);
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const base64 = canvas.toDataURL('image/jpeg', 0.7);
-        await updateDoc(doc(db, 'users', user.uid), { photoURL: base64 });
-        setUploadingPhoto(false);
-      };
-      img.src = ev.target.result;
-    };
-    reader.readAsDataURL(file);
-  }
 
-  async function saveProfile() {
-    await updateDoc(doc(db, 'users', user.uid), {
-      bio: editBio,
-      customStatus: editCustomStatus,
-    });
-    setShowSettings(false);
-  }
 
   async function openDM(u) {
     setActiveDM(u); setView('dm');
@@ -396,8 +366,7 @@ export default function Chat({ user }) {
         display: 'flex', alignItems: 'center', paddingLeft: '16px', flexShrink: 0,
         borderBottom: '1px solid var(--border)', justifyContent: 'space-between' }}>
         <span style={{ fontFamily: 'var(--font-head)', fontSize: '0.82rem', fontWeight: 700,
-          background: `linear-gradient(135deg, ${theme['--accent']}, ${theme['--accent2']})`,
-          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Aighto</span>
+          color: theme['--accent'] }}>Aighto</span>
         <div style={{ display: 'flex', WebkitAppRegion: 'no-drag' }}>
           {[{label:'─',action:'minimize',hov:'rgba(255,255,255,0.1)'},{label:'⬜',action:'maximize',hov:'rgba(255,255,255,0.1)'},{label:'✕',action:'close',hov:'#e74c3c'}].map(btn => (
             <button key={btn.action} onClick={() => window.electron?.[btn.action]()}
@@ -868,58 +837,15 @@ export default function Chat({ user }) {
         </div>
       )}
 
-      {/* SETTINGS MODAL */}
       {showSettings && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={() => setShowSettings(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: '20px', padding: '28px', width: '320px', boxShadow: '0 20px 60px rgba(0,0,0,0.6)', animation: 'fadein 0.2s ease' }}>
-            <h3 style={{ fontFamily: 'var(--font-head)', fontSize: '1rem', fontWeight: 700, color: 'var(--text)', margin: '0 0 20px' }}>Edit Profile</h3>
-
-            {/* Avatar upload */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
-              <Avatar name={user.displayName || user.email} size={56} photoURL={myData.photoURL} />
-              <div>
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={uploadPhoto} style={{ display: 'none' }} />
-                <button onClick={() => fileInputRef.current?.click()}
-                  style={{ background: `${theme['--accent']}22`, border: `1px solid ${theme['--accent']}44`, borderRadius: '8px', padding: '7px 14px', color: 'var(--accent2)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font)' }}>
-                  {uploadingPhoto ? 'Uploading...' : '📷 Change Photo'}
-                </button>
-                <div style={{ fontSize: '0.65rem', color: 'var(--text3)', marginTop: '4px' }}>Max 150×150px, compressed automatically</div>
-              </div>
-            </div>
-
-            {/* Custom status */}
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '6px' }}>Custom Status</label>
-              <input value={editCustomStatus} onChange={e => setEditCustomStatus(e.target.value)} placeholder="e.g. Playing Valorant 🎮"
-                style={{ width: '100%', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: '10px', padding: '10px 14px', color: 'var(--text)', fontSize: '0.85rem', fontFamily: 'var(--font)', outline: 'none' }}
-                onFocus={e => e.target.style.borderColor = `${theme['--accent']}66`}
-                onBlur={e => e.target.style.borderColor = 'var(--border)'} />
-            </div>
-
-            {/* Bio */}
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '6px' }}>Bio</label>
-              <textarea value={editBio} onChange={e => setEditBio(e.target.value)} placeholder="Tell your friends about yourself..." rows={3}
-                style={{ width: '100%', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: '10px', padding: '10px 14px', color: 'var(--text)', fontSize: '0.85rem', fontFamily: 'var(--font)', outline: 'none', resize: 'none' }}
-                onFocus={e => e.target.style.borderColor = `${theme['--accent']}66`}
-                onBlur={e => e.target.style.borderColor = 'var(--border)'} />
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button onClick={saveProfile}
-                style={{ flex: 1, background: `linear-gradient(135deg, var(--accent), var(--accent2))`, border: 'none', borderRadius: '10px', padding: '11px', color: 'white', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'var(--font)' }}>
-                Save
-              </button>
-              <button onClick={() => setShowSettings(false)}
-                style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', borderRadius: '10px', padding: '11px', color: 'var(--text2)', fontSize: '0.88rem', cursor: 'pointer', fontFamily: 'var(--font)' }}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+        <Settings
+          user={user}
+          myData={myData}
+          activeTheme={activeTheme}
+          switchTheme={switchTheme}
+          onClose={() => setShowSettings(false)}
+        />
       )}
-
       <style>{`
         @keyframes typing-dot {
           0%,60%,100% { transform: translateY(0); opacity: 0.4; }
