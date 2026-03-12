@@ -1,6 +1,11 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
+const log = require('electron-log');
+
+// Log to file so we can see what's happening
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = 'info';
 
 let mainWindow;
 
@@ -31,28 +36,44 @@ function createWindow() {
   ipcMain.on('close',    () => mainWindow.close());
 }
 
-// ── AUTO UPDATER ──
 function setupAutoUpdater() {
-  // Don't check for updates in dev mode
   if (!app.isPackaged) return;
 
   autoUpdater.checkForUpdatesAndNotify();
 
-  autoUpdater.on('update-available', () => {
+  autoUpdater.on('checking-for-update', () => {
+    log.info('Checking for update...');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    log.info('Update available:', info.version);
+    mainWindow.webContents.send('update-available');
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    log.info('Update not available. Current:', info.version);
+  });
+
+  autoUpdater.on('error', (err) => {
+    log.error('Auto updater error:', err);
+    // Show error dialog so we can see what went wrong
+    dialog.showErrorBox('Update Error', err.message || String(err));
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    log.info(`Download progress: ${Math.round(progress.percent)}%`);
     mainWindow.webContents.send('update-available');
   });
 
   autoUpdater.on('update-downloaded', () => {
-    // Tell the renderer so it can show a notification
+    log.info('Update downloaded!');
     mainWindow.webContents.send('update-downloaded');
   });
 
-  // Allow renderer to trigger install
   ipcMain.on('install-update', () => {
     autoUpdater.quitAndInstall();
   });
 
-  // Check for updates every 30 minutes
   setInterval(() => {
     autoUpdater.checkForUpdatesAndNotify();
   }, 30 * 60 * 1000);
