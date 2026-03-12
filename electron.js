@@ -1,13 +1,36 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const log = require('electron-log');
 
-// Log to file so we can see what's happening
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
 
 let mainWindow;
+let tray = null;
+let minimizeToTray = true; // default on
+
+function createTray() {
+  const iconPath = path.join(__dirname, app.isPackaged ? 'build/icon.ico' : 'public/icon.ico');
+  const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  tray = new Tray(icon);
+  tray.setToolTip('Aighto');
+  tray.on('click', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
+  updateTrayMenu();
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
+  const menu = Menu.buildFromTemplate([
+    { label: 'Open Aighto', click: () => { mainWindow.show(); mainWindow.focus(); } },
+    { type: 'separator' },
+    { label: 'Quit', click: () => { app.quit(); } },
+  ]);
+  tray.setContextMenu(menu);
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -31,19 +54,38 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, 'build/index.html'));
   }
 
+  // Handle close button
+  mainWindow.on('close', (e) => {
+    if (minimizeToTray) {
+      e.preventDefault();
+      mainWindow.hide();
+    }
+  });
+
   ipcMain.on('minimize', () => mainWindow.minimize());
   ipcMain.on('maximize', () => mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize());
-  ipcMain.on('close',    () => mainWindow.close());
+  ipcMain.on('close',    () => {
+    if (minimizeToTray) {
+      mainWindow.hide();
+    } else {
+      mainWindow.close();
+    }
+  });
+
+  // Toggle minimize to tray setting from renderer
+  ipcMain.on('set-minimize-to-tray', (_, val) => {
+    minimizeToTray = val;
+    if (val && !tray) createTray();
+  });
+
+  // Force quit from renderer (e.g. sign out)
+  ipcMain.on('force-quit', () => app.quit());
 }
 
 function setupAutoUpdater() {
   if (!app.isPackaged) return;
 
   autoUpdater.checkForUpdatesAndNotify();
-
-  autoUpdater.on('checking-for-update', () => {
-    log.info('Checking for update...');
-  });
 
   autoUpdater.on('update-available', (info) => {
     log.info('Update available:', info.version);
@@ -56,13 +98,7 @@ function setupAutoUpdater() {
 
   autoUpdater.on('error', (err) => {
     log.error('Auto updater error:', err);
-    // Show error dialog so we can see what went wrong
     dialog.showErrorBox('Update Error', err.message || String(err));
-  });
-
-  autoUpdater.on('download-progress', (progress) => {
-    log.info(`Download progress: ${Math.round(progress.percent)}%`);
-    mainWindow.webContents.send('update-available');
   });
 
   autoUpdater.on('update-downloaded', () => {
@@ -81,8 +117,13 @@ function setupAutoUpdater() {
 
 app.whenReady().then(() => {
   createWindow();
+  createTray();
   setupAutoUpdater();
 });
 
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin' && !minimizeToTray) app.quit();
+});
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});

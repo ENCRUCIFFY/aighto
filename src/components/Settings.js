@@ -291,6 +291,27 @@ function AccountSection({ user }) {
         <SaveBtn onClick={changePassword} loading={loading} label="Change Password" />
       </div>
 
+      {/* Minimize to tray */}
+      <div style={{ marginBottom:'28px' }}>
+        <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--text2)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'14px' }}>App Behaviour</div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:'12px' }}>
+          <div>
+            <div style={{ fontSize:'0.85rem', color:'var(--text)', fontWeight:500 }}>Minimize to tray on close</div>
+            <div style={{ fontSize:'0.72rem', color:'var(--text3)', marginTop:'2px' }}>App stays running in the background when you close the window</div>
+          </div>
+          <div onClick={() => {
+            const newVal = !trayEnabled;
+            setTrayEnabled(newVal);
+            localStorage.setItem('aighto_tray', newVal.toString());
+            window.electron?.setMinimizeToTray?.(newVal);
+          }} style={{ width:'42px', height:'24px', borderRadius:'12px', cursor:'pointer', transition:'background 0.2s', flexShrink:0,
+            background:trayEnabled?'var(--accent)':'rgba(255,255,255,0.1)', position:'relative' }}>
+            <div style={{ position:'absolute', top:'3px', left:trayEnabled?'21px':'3px', width:'18px', height:'18px',
+              borderRadius:'50%', background:'white', transition:'left 0.2s', boxShadow:'0 1px 4px rgba(0,0,0,0.3)' }} />
+          </div>
+        </div>
+      </div>
+
       {/* Danger zone */}
       <div style={{ padding: '18px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '14px' }}>
         <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#f87171', marginBottom: '6px' }}>⚠️ Danger Zone</div>
