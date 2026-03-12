@@ -35,7 +35,7 @@ const THEMES = {
   black: {
     name: '⚫ Pure Black',
     '--bg':      '#000000', '--bg2': '#0a0a0a', '--bg3': '#111111',
-    '--accent':  '#ffffff', '--accent2': '#aaaaaa',
+    '--accent':  '#e0e0e0', '--accent2': '#999999',
     '--border':  'rgba(255,255,255,0.08)',
     '--text':    '#ffffff', '--text2': 'rgba(255,255,255,0.55)', '--text3': 'rgba(255,255,255,0.25)',
   },
@@ -147,10 +147,15 @@ export default function Chat({ user }) {
     applyTheme(THEMES[saved]);
   }, []);
 
-  // Auto updater listeners
+  // Auto updater listeners + apply saved font size
   useEffect(() => {
     window.electron?.onUpdateAvailable?.(() => setUpdateStatus('available'));
     window.electron?.onUpdateDownloaded?.(() => setUpdateStatus('downloaded'));
+    const savedSize = localStorage.getItem('aighto_fontsize');
+    if (savedSize) {
+      document.documentElement.style.fontSize = savedSize;
+      document.documentElement.style.setProperty('--font-size', savedSize);
+    }
   }, []);
 
   // Mark online
@@ -368,16 +373,29 @@ export default function Chat({ user }) {
         <span style={{ fontFamily: 'var(--font-head)', fontSize: '0.82rem', fontWeight: 700,
           color: theme['--accent'] }}>Aighto</span>
         <div style={{ display: 'flex', WebkitAppRegion: 'no-drag' }}>
-          {[{label:'─',action:'minimize',hov:'rgba(255,255,255,0.1)'},{label:'⬜',action:'maximize',hov:'rgba(255,255,255,0.1)'},{label:'✕',action:'close',hov:'#e74c3c'}].map(btn => (
-            <button key={btn.action} onClick={() => window.electron?.[btn.action]()}
-              onMouseEnter={e => e.currentTarget.style.background = btn.hov}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              style={{ background: 'transparent', border: 'none', cursor: 'pointer', width: '46px', height: '38px',
-                color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', transition: 'background 0.15s', fontFamily: 'var(--font)' }}>
-              {btn.label}
-            </button>
-          ))}
+          <div style={{ display: 'flex', WebkitAppRegion: 'no-drag' }}>
+            {[
+              { label: '─', action: 'minimize', danger: false, size: '1.1rem' },
+              { label: '⊡', action: 'maximize', danger: false, size: '1rem'   },
+              { label: '✕', action: 'close',    danger: true,  size: '1rem'   },
+            ].map(btn => (
+              <button key={btn.action} onClick={() => window.electron?.[btn.action]()}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = btn.danger ? '#e74c3c' : 'rgba(255,255,255,0.08)';
+                  e.currentTarget.style.color = 'rgba(255,255,255,0.95)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = 'rgba(255,255,255,0.4)';
+                }}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer',
+                  width: '46px', height: '38px', color: 'rgba(255,255,255,0.4)',
+                  fontSize: btn.size, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background 0.1s, color 0.1s', fontFamily: 'var(--font)', lineHeight: 1 }}>
+                {btn.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -729,8 +747,8 @@ export default function Chat({ user }) {
                 <div onClick={e => e.stopPropagation()} style={{
                   position: 'absolute', bottom: '100%', left: 0,
                   background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: '14px',
-                  padding: '10px', width: '280px', zIndex: 100, boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-                  display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '4px',
+                  padding: '12px', width: '320px', zIndex: 100, boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+                  display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: '6px',
                 }}>
                   {EMOJI_LIST.map(emoji => (
                     <button key={emoji} type="button"

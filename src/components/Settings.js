@@ -5,7 +5,7 @@ import { auth, db } from '../firebase';
 
 const THEMES = {
   purple: { name: '🟣 Purple',     '--accent': '#7c5cfc', '--accent2': '#c084fc' },
-  black:  { name: '⚫ Pure Black',  '--accent': '#ffffff', '--accent2': '#aaaaaa' },
+  black:  { name: '⚫ Pure Black',  '--accent': '#e0e0e0', '--accent2': '#999999' },
   red:    { name: '🔴 Red Dark',    '--accent': '#ef4444', '--accent2': '#f87171' },
   pink:   { name: '🌸 Soft Pink',   '--accent': '#ec4899', '--accent2': '#f9a8d4' },
   ocean:  { name: '🔵 Ocean Blue',  '--accent': '#3b82f6', '--accent2': '#60a5fa' },
@@ -165,6 +165,7 @@ function AppearanceSection({ activeTheme, switchTheme }) {
   function changeFontSize(size) {
     setFontSize(size);
     localStorage.setItem('aighto_fontsize', size);
+    document.documentElement.style.fontSize = size;
     document.documentElement.style.setProperty('--font-size', size);
   }
 

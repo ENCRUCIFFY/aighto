@@ -17,10 +17,12 @@
   --radius:    14px;
   --font:      'DM Sans', sans-serif;
   --font-head: 'Syne', sans-serif;
+  --font-size: 15px;
 }
 
 body {
   font-family: var(--font);
+  font-size: var(--font-size);
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
