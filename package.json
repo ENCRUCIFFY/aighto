@@ -1,6 +1,6 @@
 {
   "name": "aighto",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Aighto - Chat with your friends",
   "main": "electron.js",
   "homepage": "./",
@@ -28,7 +28,6 @@
   "build": {
     "appId": "com.aighto.app",
     "productName": "Aighto",
-    "artifactName": "${productName}-Setup-${version}.${ext}",
     "files": [
       "build/**/*",
       "electron.js",

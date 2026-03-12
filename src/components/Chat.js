@@ -7,8 +7,11 @@ import {
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import Settings from './Settings';
+import DevPanel from './DevPanel';
 
-const CHANNELS = [
+const DEV_UID = 'cqQ7tJh6h8c9Vqul4hMAZg39E0l2';
+
+const DEFAULT_CHANNELS = [
   { id: 'general', name: 'general', icon: '💬' },
   { id: 'random',  name: 'random',  icon: '🎲' },
   { id: 'gaming',  name: 'gaming',  icon: '🎮' },
@@ -139,7 +142,11 @@ export default function Chat({ user }) {
   const [activeTheme, setActiveTheme]       = useState('purple');
   const [showThemeMenu, setShowThemeMenu]   = useState(false);
   const [showSettings, setShowSettings]     = useState(false);
+  const [showDevPanel, setShowDevPanel]     = useState(false);
   const [updateStatus, setUpdateStatus]     = useState(null);
+  const [customChannels, setCustomChannels] = useState([]);
+  const [maintenance, setMaintenance]       = useState({ enabled: false, message: '' });
+  const isOwner = user.uid === DEV_UID;
   const [showSearch, setShowSearch]         = useState(false);
   const [searchQuery, setSearchQuery]       = useState('');
   const [showJumpBtn, setShowJumpBtn]       = useState(false);
@@ -212,7 +219,7 @@ export default function Chat({ user }) {
 
   // Unread
   useEffect(() => {
-    const unsubs = CHANNELS.map(ch => {
+    const unsubs = DEFAULT_CHANNELS.map(ch => {
       const q = query(collection(db, 'channels', ch.id, 'messages'), orderBy('createdAt'));
       return onSnapshot(q, snap => {
         if (view === 'channel' && activeChannel === ch.id) return;
@@ -254,6 +261,35 @@ export default function Chat({ user }) {
     });
   }, [view, activeChannel, activeDM, user.uid, users]);
 
+  // Custom channels
+  useEffect(() => {
+    return onSnapshot(collection(db, 'customChannels'), snap => {
+      setCustomChannels(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+  }, []);
+
+  // Maintenance mode
+  useEffect(() => {
+    return onSnapshot(doc(db, 'appConfig', 'maintenance'), snap => {
+      const data = snap.data() || {};
+      setMaintenance({ enabled: data.enabled || false, message: data.message || '' });
+    });
+  }, []);
+
+  // Kick detection
+  useEffect(() => {
+    return onSnapshot(doc(db, 'users', user.uid), snap => {
+      if (snap.data()?.kicked) signOut(auth);
+    });
+  }, [user.uid]);
+
+  // Mute detection
+  useEffect(() => {
+    return onSnapshot(doc(db, 'users', user.uid), snap => {
+      // myData listener already handles this, muted stored in myData
+    });
+  }, [user.uid]);
+
   // Auto scroll
   useEffect(() => {
     if (!showJumpBtn) messagesEndRef.current?.scrollIntoView({ behavior:'smooth' });
@@ -286,6 +322,7 @@ export default function Chat({ user }) {
   async function sendMessage(e) {
     e.preventDefault();
     if (!input.trim()) return;
+    if (myData.muted) return;
     const text = input.trim();
     setInput(''); setReplyTo(null); clearTyping();
     const msg = {
@@ -313,7 +350,7 @@ export default function Chat({ user }) {
   }
 
   async function deleteMessage(msg) {
-    if (msg.uid !== user.uid) return;
+    if (msg.uid !== user.uid && !isOwner) return;
     if (view === 'channel') await deleteDoc(doc(db, 'channels', activeChannel, 'messages', msg.id));
     else if (activeDM) await deleteDoc(doc(db, 'dms', getDmId(user.uid, activeDM.uid), 'messages', msg.id));
   }
@@ -384,6 +421,7 @@ export default function Chat({ user }) {
     return friends.filter(f => theirFriends.includes(f)).map(f => users.find(u => u.uid === f)?.username).filter(Boolean);
   };
 
+  const allChannels = [...DEFAULT_CHANNELS, ...customChannels.map(c => ({ id: c.id, name: c.id, icon: '💬' }))];
   const chatTitle = view === 'channel' ? `# ${activeChannel}` : `@ ${activeDM?.username}`;
   const theme = THEMES[activeTheme];
 
@@ -402,6 +440,17 @@ export default function Chat({ user }) {
         borderBottom:'1px solid var(--border)', justifyContent:'space-between' }}>
         <span style={{ fontFamily:'var(--font-head)', fontSize:'0.82rem', fontWeight:700, color:theme['--accent'] }}>Aighto</span>
         <div style={{ display:'flex', WebkitAppRegion:'no-drag' }}>
+          {isOwner && (
+            <button onClick={() => setShowDevPanel(true)}
+              title="Dev Panel"
+              style={{ background:'transparent', border:'none', cursor:'pointer', width:'46px', height:'38px',
+                color:'var(--accent)', fontSize:'0.85rem', display:'flex', alignItems:'center',
+                justifyContent:'center', transition:'background 0.1s', fontFamily:'var(--font)' }}
+              onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.08)'}
+              onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+              👑
+            </button>
+          )}
           {[
             { label:'─', action:'minimize', danger:false, size:'1.1rem' },
             { label:'⊡', action:'maximize', danger:false, size:'1rem'   },
@@ -432,7 +481,11 @@ export default function Chat({ user }) {
           </button>
         </div>
       )}
-      {updateStatus === 'available' && (
+      {maintenance.enabled && !isOwner && (
+        <div style={{ background:'rgba(251,191,36,0.12)', borderBottom:'1px solid rgba(251,191,36,0.25)', padding:'8px 16px', flexShrink:0, display:'flex', alignItems:'center', gap:'8px' }}>
+          <span style={{ fontSize:'0.82rem', color:'#fbbf24' }}>{maintenance.message || '🔧 Aighto is currently under maintenance. Check back soon!'}</span>
+        </div>
+      )}
         <div style={{ background:`${theme['--accent']}18`, borderBottom:`1px solid ${theme['--accent']}30`, padding:'6px 16px', flexShrink:0 }}>
           <span style={{ fontSize:'0.76rem', color:'var(--accent2)' }}>⬇️ Downloading update in the background...</span>
         </div>
@@ -444,7 +497,7 @@ export default function Chat({ user }) {
         <div style={{ width:'220px', flexShrink:0, background:'var(--bg2)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', overflow:'hidden' }}>
           <div style={{ padding:'12px 10px 6px' }}>
             <div style={{ fontSize:'0.63rem', fontWeight:700, color:'var(--text3)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'5px', paddingLeft:'8px' }}>Channels</div>
-            {CHANNELS.map(ch => (
+            {allChannels.map(ch => (
               <button key={ch.id} onClick={() => { setActiveChannel(ch.id); setView('channel'); setActiveDM(null); markRead(ch.id); setShowSearch(false); setSearchQuery(''); }}
                 style={{ width:'100%', background:view==='channel'&&activeChannel===ch.id ? `${theme['--accent']}22` : 'transparent',
                   border:'none', borderRadius:'8px', padding:'7px 10px', display:'flex', alignItems:'center',
@@ -658,6 +711,7 @@ export default function Chat({ user }) {
                     {!grouped && (
                       <div style={{ display:'flex', alignItems:'baseline', gap:'6px', marginBottom:'3px', paddingLeft:isMe?0:'4px', paddingRight:isMe?'4px':0 }}>
                         <span style={{ fontSize:'0.72rem', color:'var(--text2)', fontWeight:600 }}>{msg.username}</span>
+                        {msg.uid === DEV_UID && <span style={{ fontSize:'0.6rem', background:'rgba(245,158,11,0.2)', border:'1px solid rgba(245,158,11,0.4)', borderRadius:'5px', padding:'1px 5px', color:'#f59e0b' }}>👑 Owner</span>}
                         {time && <span style={{ fontSize:'0.62rem', color:'var(--text3)' }}>{time}</span>}
                       </div>
                     )}
@@ -731,7 +785,7 @@ export default function Chat({ user }) {
                       </div>
                       <button onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
                         style={{ background:'none', border:'none', cursor:'pointer', fontSize:'0.75rem', padding:'2px 6px', color:'var(--text2)', fontFamily:'var(--font)' }}>↩</button>
-                      {isMe && (
+                      {(isMe || isOwner) && (
                         <>
                           <button onClick={() => { setEditingMsg(msg); setEditText(msg.text); }}
                             style={{ background:'none', border:'none', cursor:'pointer', fontSize:'0.75rem', padding:'2px 5px', color:'var(--text2)', fontFamily:'var(--font)' }}>✏️</button>
@@ -804,7 +858,8 @@ export default function Chat({ user }) {
             <input ref={inputRef} type="text" value={input}
               onChange={e => { setInput(e.target.value); handleTyping(); }}
               onBlur={clearTyping}
-              placeholder={`Message ${chatTitle}...`}
+              placeholder={myData.muted ? '🔇 You are muted' : `Message ${chatTitle}...`}
+              disabled={myData.muted}
               style={{ flex:1, background:'var(--bg3)', border:'1px solid var(--border)', borderRadius:'12px',
                 padding:'11px 16px', color:'var(--text)', fontSize:'0.88rem', fontFamily:'var(--font)', outline:'none', transition:'border 0.2s' }}
               onFocus={e => e.target.style.borderColor=`${theme['--accent']}66`} />
@@ -909,6 +964,10 @@ export default function Chat({ user }) {
 
       {showSettings && (
         <Settings user={user} myData={myData} activeTheme={activeTheme} switchTheme={switchTheme} onClose={() => setShowSettings(false)} />
+      )}
+
+      {showDevPanel && (
+        <DevPanel user={user} onClose={() => setShowDevPanel(false)} theme={theme} />
       )}
 
       <style>{`
