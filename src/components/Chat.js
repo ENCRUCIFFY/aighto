@@ -171,6 +171,7 @@ export default function Chat({ user }) {
     // Apply saved tray setting
     const tray = localStorage.getItem('aighto_tray') !== 'false';
     window.electron?.setMinimizeToTray?.(tray);
+    window.electron?.discordUpdate?.({ channel: 'general', state: 'Chatting' });
   }, []);
 
   // Mark online
@@ -406,6 +407,7 @@ export default function Chat({ user }) {
   async function openDM(u) {
     setActiveDM(u); setView('dm');
     setSearchUser(''); setSearchResults([]); setProfileUser(null);
+    window.electron?.discordUpdate?.({ channel: 'DM', state: `Talking with ${u.username}` });
   }
 
   function handleSearch(val) {
@@ -499,7 +501,7 @@ export default function Chat({ user }) {
           <div style={{ padding:'12px 10px 6px' }}>
             <div style={{ fontSize:'0.63rem', fontWeight:700, color:'var(--text3)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'5px', paddingLeft:'8px' }}>Channels</div>
             {allChannels.map(ch => (
-              <button key={ch.id} onClick={() => { setActiveChannel(ch.id); setView('channel'); setActiveDM(null); markRead(ch.id); setShowSearch(false); setSearchQuery(''); }}
+              <button key={ch.id} onClick={() => { setActiveChannel(ch.id); setView('channel'); setActiveDM(null); markRead(ch.id); setShowSearch(false); setSearchQuery(''); window.electron?.discordUpdate?.({ channel: ch.name, state: 'Chatting' }); }}
                 style={{ width:'100%', background:view==='channel'&&activeChannel===ch.id ? `${theme['--accent']}22` : 'transparent',
                   border:'none', borderRadius:'8px', padding:'7px 10px', display:'flex', alignItems:'center',
                   gap:'8px', cursor:'pointer', transition:'background 0.15s', justifyContent:'space-between' }}>

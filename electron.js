@@ -2,6 +2,39 @@ const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const log = require('electron-log');
+const DiscordRPC = require('discord-rpc');
+
+const DISCORD_CLIENT_ID = '1481748237621657641';
+DiscordRPC.register(DISCORD_CLIENT_ID);
+const rpc = new DiscordRPC.Client({ transport: 'ipc' });
+let rpcReady = false;
+const startTimestamp = new Date();
+
+async function setDiscordActivity({ channel = 'Aighto', state = 'Chatting' } = {}) {
+  if (!rpcReady) return;
+  try {
+    await rpc.setActivity({
+      details: `In #${channel}`,
+      state: state,
+      startTimestamp,
+      largeImageKey: 'aighto_logo',
+      largeImageText: 'Aighto',
+      instance: false,
+    });
+  } catch (e) {
+    log.error('Discord RPC error:', e);
+  }
+}
+
+rpc.on('ready', () => {
+  rpcReady = true;
+  log.info('Discord RPC ready');
+  setDiscordActivity();
+});
+
+rpc.login({ clientId: DISCORD_CLIENT_ID }).catch(e => {
+  log.warn('Discord RPC login failed (Discord might not be open):', e.message);
+});
 
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
@@ -80,6 +113,11 @@ function createWindow() {
 
   // Force quit from renderer (e.g. sign out)
   ipcMain.on('force-quit', () => app.quit());
+
+  // Discord RPC channel update
+  ipcMain.on('discord-update', (_, { channel, state }) => {
+    setDiscordActivity({ channel, state });
+  });
 }
 
 function setupAutoUpdater() {

@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electron', {
   forceQuit: () => ipcRenderer.send('force-quit'),
   installUpdate: () => ipcRenderer.send('install-update'),
   setMinimizeToTray: (val) => ipcRenderer.send('set-minimize-to-tray', val),
+  discordUpdate: (data) => ipcRenderer.send('discord-update', data),
   onUpdateAvailable: (cb) => ipcRenderer.on('update-available', cb),
   onUpdateDownloaded: (cb) => ipcRenderer.on('update-downloaded', cb),
   platform: process.platform,
