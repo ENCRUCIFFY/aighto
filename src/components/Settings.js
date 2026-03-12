@@ -225,6 +225,7 @@ function AccountSection({ user }) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [deleteConfirm, setDeleteConfirm]   = useState('');
   const [showDelete, setShowDelete]         = useState(false);
+  const [trayEnabled, setTrayEnabled]       = useState(() => localStorage.getItem('aighto_tray') !== 'false');
   const [loading, setLoading]               = useState(false);
   const [toast, setToast]                   = useState(null);
 

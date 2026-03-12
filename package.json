@@ -28,6 +28,7 @@
   "build": {
     "appId": "com.aighto.app",
     "productName": "Aighto",
+    "artifactName": "${productName}-Setup-${version}.${ext}",
     "files": [
       "build/**/*",
       "electron.js",
