@@ -486,6 +486,7 @@ export default function Chat({ user }) {
           <span style={{ fontSize:'0.82rem', color:'#fbbf24' }}>{maintenance.message || '🔧 Aighto is currently under maintenance. Check back soon!'}</span>
         </div>
       )}
+      {updateStatus === 'available' && (
         <div style={{ background:`${theme['--accent']}18`, borderBottom:`1px solid ${theme['--accent']}30`, padding:'6px 16px', flexShrink:0 }}>
           <span style={{ fontSize:'0.76rem', color:'var(--accent2)' }}>⬇️ Downloading update in the background...</span>
         </div>
