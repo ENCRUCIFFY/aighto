@@ -146,6 +146,10 @@ export default function Chat({ user }) {
   const [updateStatus, setUpdateStatus]     = useState(null);
   const [customChannels, setCustomChannels] = useState([]);
   const [maintenance, setMaintenance]       = useState({ enabled: false, message: '' });
+  const [motd, setMotd]                     = useState({ enabled: false, text: '' });
+  const [patchPopup, setPatchPopup]         = useState(null);
+  const [showWarnPopup, setShowWarnPopup]   = useState(false);
+  const [warnMessage, setWarnMessage]       = useState('');
   const isOwner = user.uid === DEV_UID;
   const [showSearch, setShowSearch]         = useState(false);
   const [searchQuery, setSearchQuery]       = useState('');
@@ -190,7 +194,7 @@ export default function Chat({ user }) {
     };
   }, [user.uid]);
 
-  // My data
+  // My data — single listener for all user doc changes
   useEffect(() => {
     return onSnapshot(doc(db, 'users', user.uid), snap => {
       const data = snap.data() || {};
@@ -198,6 +202,16 @@ export default function Chat({ user }) {
       setFriendRequests(data.friendRequests || []);
       setMyStatus(data.status || 'online');
       setMyData(data);
+      // Kick
+      if (data.kicked) signOut(auth);
+      // Ban
+      if (data.banned) signOut(auth);
+      // Warn
+      if (data.warned) {
+        setWarnMessage(data.warnMessage || 'Please follow the community guidelines.');
+        setShowWarnPopup(true);
+        updateDoc(doc(db, 'users', user.uid), { warned: false });
+      }
     });
   }, [user.uid]);
 
@@ -277,20 +291,55 @@ export default function Chat({ user }) {
     });
   }, []);
 
-  // Kick detection
+  // MOTD
   useEffect(() => {
-    return onSnapshot(doc(db, 'users', user.uid), snap => {
-      if (snap.data()?.kicked) signOut(auth);
+    return onSnapshot(doc(db, 'appConfig', 'motd'), snap => {
+      const data = snap.data() || {};
+      setMotd({ enabled: data.enabled || false, text: data.text || '' });
     });
+  }, []);
+
+  // Patch notes first-launch popup
+  useEffect(() => {
+    return onSnapshot(doc(db, 'appConfig', 'patchNotes'), snap => {
+      const data = snap.data() || {};
+      if (!data.version || !data.notes) return;
+      const seenKey = `patchSeen_${data.version}`;
+      if (!localStorage.getItem(seenKey)) {
+        setPatchPopup({ version: data.version, notes: data.notes });
+      }
+    });
+  }, []);
+
+  // Log device info and track session time
+  useEffect(() => {
+    const os = navigator.userAgentData?.platform || navigator.platform || 'Unknown';
+    const appVersion = window.electron?.appVersion || 'dev';
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const sessionStart = Date.now();
+    setDoc(doc(db, 'users', user.uid), {
+      os, appVersion, timezone, lastSeen: serverTimestamp(),
+    }, { merge: true });
+    // Update session time on unload
+    const handleUnload = () => {
+      const elapsed = Date.now() - sessionStart;
+      setDoc(doc(db, 'users', user.uid), {
+        sessionTime: (myData.sessionTime || 0) + elapsed,
+      }, { merge: true });
+    };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
   }, [user.uid]);
 
-  // Mute detection
+  // Member since — set createdAt from Firebase Auth metadata
   useEffect(() => {
-    return onSnapshot(doc(db, 'users', user.uid), snap => {
-      // myData listener already handles this, muted stored in myData
-    });
+    const creationTime = user.metadata?.creationTime;
+    if (creationTime) {
+      setDoc(doc(db, 'users', user.uid), { createdAt: new Date(creationTime) }, { merge: true });
+    }
   }, [user.uid]);
 
+  // Taskbar badge — coming in 1.0.7
   // Auto scroll
   useEffect(() => {
     if (!showJumpBtn) messagesEndRef.current?.scrollIntoView({ behavior:'smooth' });
@@ -436,6 +485,43 @@ export default function Chat({ user }) {
     <div style={{ width:'100vw', height:'100vh', display:'flex', flexDirection:'column', background:'var(--bg)', fontFamily:'var(--font)' }}
       onClick={() => { setShowStatusMenu(false); setShowReactionPicker(null); setShowEmojiPicker(false); setShowThemeMenu(false); }}>
 
+      {/* WARN POPUP */}
+      {showWarnPopup && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:600, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:'var(--bg2)', border:'1px solid rgba(251,191,36,0.4)', borderRadius:'16px', padding:'28px', width:'320px', textAlign:'center' }}>
+            <div style={{ fontSize:'2rem', marginBottom:'10px' }}>⚠️</div>
+            <div style={{ fontFamily:'var(--font-head)', fontSize:'1rem', fontWeight:700, color:'#fbbf24', marginBottom:'10px' }}>You have been warned</div>
+            <div style={{ fontSize:'0.85rem', color:'var(--text2)', marginBottom:'20px', lineHeight:1.5 }}>{warnMessage}</div>
+            <button onClick={() => setShowWarnPopup(false)}
+              style={{ background:`linear-gradient(135deg, var(--accent), var(--accent2))`, border:'none', borderRadius:'10px', padding:'10px 24px', color:'white', fontSize:'0.85rem', fontWeight:600, cursor:'pointer', fontFamily:'var(--font)' }}>
+              I understand
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PATCH NOTES POPUP */}
+      {patchPopup && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:600, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:'var(--bg2)', border:`1px solid ${theme['--accent']}44`, borderRadius:'16px', padding:'28px', width:'400px', maxHeight:'500px', display:'flex', flexDirection:'column' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'16px' }}>
+              <span style={{ fontSize:'1.3rem' }}>📝</span>
+              <div>
+                <div style={{ fontFamily:'var(--font-head)', fontSize:'1rem', fontWeight:700, color:'var(--text)' }}>What's new in Aighto</div>
+                <div style={{ fontSize:'0.72rem', color:'var(--accent2)' }}>v{patchPopup.version}</div>
+              </div>
+            </div>
+            <div style={{ flex:1, overflowY:'auto', fontSize:'0.85rem', color:'var(--text2)', lineHeight:1.7, whiteSpace:'pre-wrap', marginBottom:'16px' }}>
+              {patchPopup.notes}
+            </div>
+            <button onClick={() => { localStorage.setItem(`patchSeen_${patchPopup.version}`, '1'); setPatchPopup(null); }}
+              style={{ background:`linear-gradient(135deg, var(--accent), var(--accent2))`, border:'none', borderRadius:'10px', padding:'10px', color:'white', fontSize:'0.85rem', fontWeight:600, cursor:'pointer', fontFamily:'var(--font)' }}>
+              Let's go! 🚀
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* TITLE BAR */}
       <div style={{ height:'38px', background:'var(--bg)', WebkitAppRegion:'drag',
         display:'flex', alignItems:'center', paddingLeft:'16px', flexShrink:0,
@@ -486,6 +572,11 @@ export default function Chat({ user }) {
       {maintenance.enabled && !isOwner && (
         <div style={{ background:'rgba(251,191,36,0.12)', borderBottom:'1px solid rgba(251,191,36,0.25)', padding:'8px 16px', flexShrink:0, display:'flex', alignItems:'center', gap:'8px' }}>
           <span style={{ fontSize:'0.82rem', color:'#fbbf24' }}>{maintenance.message || '🔧 Aighto is currently under maintenance. Check back soon!'}</span>
+        </div>
+      )}
+      {motd.enabled && (
+        <div style={{ background:`${theme['--accent']}14`, borderBottom:`1px solid ${theme['--accent']}30`, padding:'7px 16px', flexShrink:0, display:'flex', alignItems:'center', gap:'8px' }}>
+          <span style={{ fontSize:'0.8rem', color:'var(--accent2)' }}>📣 {motd.text}</span>
         </div>
       )}
       {updateStatus === 'available' && (
@@ -934,6 +1025,12 @@ export default function Chat({ user }) {
                   </div>
                 )}
                 {profileUser.bio && <div style={{ fontSize:'0.78rem', color:'var(--text2)', marginTop:'8px', lineHeight:1.4 }}>{profileUser.bio}</div>}
+                {/* Member since */}
+                {profileUser.createdAt && (
+                  <div style={{ fontSize:'0.68rem', color:'var(--text3)', marginTop:'6px' }}>
+                    📅 Member since {formatLastSeen(profileUser.createdAt).includes('ago') ? new Date(profileUser.createdAt?.toDate?.() || profileUser.createdAt).toLocaleDateString('en-US', { month:'long', year:'numeric' }) : 'recently'}
+                  </div>
+                )}
                 {/* Mutual friends */}
                 {getMutualFriends(profileUser.uid).length > 0 && (
                   <div style={{ fontSize:'0.7rem', color:'var(--text3)', marginTop:'8px' }}>

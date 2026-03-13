@@ -1,7 +1,36 @@
-import { useState, useRef } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { useState, useRef, useEffect } from 'react';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { updatePassword, updateProfile, reauthenticateWithCredential, EmailAuthProvider, deleteUser } from 'firebase/auth';
 import { auth, db } from '../firebase';
+
+function PatchNotesSection() {
+  const [patchNotes, setPatchNotes] = useState('');
+  const [patchVersion, setPatchVersion] = useState('');
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'appConfig', 'patchNotes'), snap => {
+      const data = snap.data() || {};
+      setPatchNotes(data.notes || '');
+      setPatchVersion(data.version || '');
+    });
+  }, []);
+
+  return (
+    <div>
+      <h2 style={{ fontFamily:'var(--font-head)', fontSize:'1.1rem', fontWeight:700, color:'var(--text)', margin:'0 0 20px' }}>Patch Notes</h2>
+      {patchVersion && (
+        <div style={{ display:'inline-block', background:'var(--accent)22', border:'1px solid var(--accent)44', borderRadius:'8px', padding:'3px 12px', fontSize:'0.75rem', color:'var(--accent2)', fontWeight:600, marginBottom:'14px' }}>
+          v{patchVersion}
+        </div>
+      )}
+      {patchNotes ? (
+        <div style={{ fontSize:'0.88rem', color:'var(--text2)', lineHeight:1.7, whiteSpace:'pre-wrap' }}>{patchNotes}</div>
+      ) : (
+        <div style={{ fontSize:'0.85rem', color:'var(--text3)' }}>No patch notes available yet.</div>
+      )}
+    </div>
+  );
+}
 
 const THEMES = {
   purple: { name: '🟣 Purple',     '--accent': '#7c5cfc', '--accent2': '#c084fc' },
@@ -357,9 +386,10 @@ export default function Settings({ user, myData, activeTheme, switchTheme, onClo
   const [activeSection, setActiveSection] = useState('profile');
 
   const NAV = [
-    { id: 'profile',    label: 'Profile',    icon: '👤' },
-    { id: 'appearance', label: 'Appearance', icon: '🎨' },
-    { id: 'account',    label: 'Account',    icon: '⚙️' },
+    { id: 'profile',     label: 'Profile',      icon: '👤' },
+    { id: 'appearance',  label: 'Appearance',   icon: '🎨' },
+    { id: 'account',     label: 'Account',      icon: '⚙️' },
+    { id: 'patchnotes',  label: 'Patch Notes',  icon: '📝' },
   ];
 
   return (
@@ -401,6 +431,7 @@ export default function Settings({ user, myData, activeTheme, switchTheme, onClo
           {activeSection === 'profile'    && <ProfileSection user={user} myData={myData} />}
           {activeSection === 'appearance' && <AppearanceSection activeTheme={activeTheme} switchTheme={switchTheme} />}
           {activeSection === 'account'    && <AccountSection user={user} />}
+          {activeSection === 'patchnotes' && <PatchNotesSection />}
         </div>
       </div>
 
