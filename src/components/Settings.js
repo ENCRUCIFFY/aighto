@@ -1,33 +1,39 @@
 import { useState, useRef, useEffect } from 'react';
-import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { doc, updateDoc, onSnapshot, collection } from 'firebase/firestore';
 import { updatePassword, updateProfile, reauthenticateWithCredential, EmailAuthProvider, deleteUser } from 'firebase/auth';
 import { auth, db } from '../firebase';
 
 function PatchNotesSection() {
-  const [patchNotes, setPatchNotes] = useState('');
-  const [patchVersion, setPatchVersion] = useState('');
+  const [history, setHistory] = useState([]);
 
   useEffect(() => {
-    return onSnapshot(doc(db, 'appConfig', 'patchNotes'), snap => {
-      const data = snap.data() || {};
-      setPatchNotes(data.notes || '');
-      setPatchVersion(data.version || '');
+    return onSnapshot(collection(db, 'patchHistory'), snap => {
+      const entries = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      entries.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+      setHistory(entries);
     });
   }, []);
 
   return (
     <div>
       <h2 style={{ fontFamily:'var(--font-head)', fontSize:'1.1rem', fontWeight:700, color:'var(--text)', margin:'0 0 20px' }}>Patch Notes</h2>
-      {patchVersion && (
-        <div style={{ display:'inline-block', background:'var(--accent)22', border:'1px solid var(--accent)44', borderRadius:'8px', padding:'3px 12px', fontSize:'0.75rem', color:'var(--accent2)', fontWeight:600, marginBottom:'14px' }}>
-          v{patchVersion}
-        </div>
-      )}
-      {patchNotes ? (
-        <div style={{ fontSize:'0.88rem', color:'var(--text2)', lineHeight:1.7, whiteSpace:'pre-wrap' }}>{patchNotes}</div>
-      ) : (
+      {history.length === 0 && (
         <div style={{ fontSize:'0.85rem', color:'var(--text3)' }}>No patch notes available yet.</div>
       )}
+      <div style={{ display:'flex', flexDirection:'column', gap:'20px' }}>
+        {history.map((entry, i) => (
+          <div key={entry.id}>
+            <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'10px' }}>
+              <div style={{ display:'inline-block', background:'var(--accent)22', border:'1px solid var(--accent)44', borderRadius:'8px', padding:'3px 12px', fontSize:'0.75rem', color:'var(--accent2)', fontWeight:700 }}>
+                v{entry.version}
+              </div>
+              {i === 0 && <span style={{ fontSize:'0.65rem', background:'#4ade8022', border:'1px solid #4ade8044', borderRadius:'6px', padding:'2px 8px', color:'#4ade80', fontWeight:600 }}>LATEST</span>}
+            </div>
+            <div style={{ fontSize:'0.88rem', color:'var(--text2)', lineHeight:1.8, whiteSpace:'pre-wrap', paddingLeft:'4px' }}>{entry.notes}</div>
+            {i < history.length - 1 && <div style={{ height:'1px', background:'var(--border)', marginTop:'20px' }} />}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

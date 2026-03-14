@@ -445,15 +445,27 @@ export default function DevPanel({ user, onClose, theme }) {
               </div>
               {/* Patch Notes */}
               <div style={{ background:'var(--bg)', border:'1px solid var(--border)', borderRadius:'14px', padding:'14px' }}>
-                <div style={{ fontSize:'0.88rem', fontWeight:600, color:'var(--text)', marginBottom:'4px' }}>📝 Patch Notes</div>
-                <div style={{ fontSize:'0.7rem', color:'var(--text3)', marginBottom:'10px' }}>Shown in Settings → Patch Notes and as a popup on first launch</div>
-                <input type="text" value={patchVersion} onChange={e => setPatchVersion(e.target.value)} placeholder="Version e.g. 1.0.6"
+                <div style={{ fontSize:'0.88rem', fontWeight:600, color:'var(--text)', marginBottom:'4px' }}>📝 Add Patch Notes</div>
+                <div style={{ fontSize:'0.7rem', color:'var(--text3)', marginBottom:'10px' }}>Adds a new entry to the patch history visible in Settings → Patch Notes. Also triggers the first launch popup.</div>
+                <input type="text" value={patchVersion} onChange={e => setPatchVersion(e.target.value)} placeholder="Version e.g. 1.0.7"
                   style={{ width:'100%', background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'10px', padding:'8px 12px', color:'var(--text)', fontSize:'0.82rem', fontFamily:'var(--font)', outline:'none', marginBottom:'6px', boxSizing:'border-box' }} />
                 <textarea value={patchNotes} onChange={e => setPatchNotes(e.target.value)} rows={4} placeholder="Write patch notes..."
                   style={{ width:'100%', background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'10px', padding:'8px 12px', color:'var(--text)', fontSize:'0.82rem', fontFamily:'var(--font)', outline:'none', resize:'vertical', marginBottom:'8px', boxSizing:'border-box' }} />
-                <button onClick={() => { saveConfig('patchNotes', { notes:patchNotes, version:patchVersion, updatedAt:serverTimestamp() }); showToast('Saved!'); }}
+                <button onClick={async () => {
+                  if (!patchVersion.trim() || !patchNotes.trim()) return showToast('Fill in both fields', 'error');
+                  await addDoc(collection(db, 'patchHistory'), {
+                    version: patchVersion.trim(),
+                    notes: patchNotes.trim(),
+                    createdAt: serverTimestamp(),
+                  });
+                  // Also update appConfig/patchNotes for the popup trigger
+                  await saveConfig('patchNotes', { notes: patchNotes.trim(), version: patchVersion.trim(), updatedAt: serverTimestamp() });
+                  setPatchNotes('');
+                  setPatchVersion('');
+                  showToast('Patch notes added!');
+                }}
                   style={{ background:`linear-gradient(135deg, var(--accent), var(--accent2))`, border:'none', borderRadius:'10px', padding:'8px 18px', color:'white', fontSize:'0.82rem', fontWeight:600, cursor:'pointer', fontFamily:'var(--font)' }}>
-                  Save Patch Notes
+                  + Add Entry
                 </button>
               </div>
               {/* Maintenance */}
