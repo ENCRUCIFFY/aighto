@@ -141,6 +141,7 @@ export default function Chat({ user }) {
   const [showEmojiPicker, setShowEmojiPicker]       = useState(false);
   const [activeTheme, setActiveTheme]       = useState('purple');
   const [showThemeMenu, setShowThemeMenu]   = useState(false);
+  const [customBg, setCustomBg]             = useState(null);
   const [showSettings, setShowSettings]     = useState(false);
   const [showDevPanel, setShowDevPanel]     = useState(false);
   const [updateStatus, setUpdateStatus]     = useState(null);
@@ -163,7 +164,9 @@ export default function Chat({ user }) {
   useEffect(() => {
     const saved = localStorage.getItem('aighto_theme') || 'purple';
     setActiveTheme(saved);
-    applyTheme(THEMES[saved]);
+    if (THEMES[saved]) applyTheme(THEMES[saved]);
+    const savedBg = localStorage.getItem('aighto_custombg');
+    if (savedBg) setCustomBg(savedBg);
     const savedSize = localStorage.getItem('aighto_fontsize');
     if (savedSize) {
       document.documentElement.style.fontSize = savedSize;
@@ -367,6 +370,36 @@ export default function Chat({ user }) {
     localStorage.setItem('aighto_theme', themeKey);
     applyTheme(THEMES[themeKey]);
     setShowThemeMenu(false);
+    // Clear custom bg when switching to a normal theme
+    if (themeKey !== 'custom') {
+      setCustomBg(null);
+      localStorage.removeItem('aighto_custombg');
+    }
+  }
+
+  function handleBgUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result;
+      setCustomBg(dataUrl);
+      localStorage.setItem('aighto_custombg', dataUrl);
+      setActiveTheme('custom');
+      localStorage.setItem('aighto_theme', 'custom');
+      // Keep current theme colors for glass effect
+      const currentTheme = THEMES[activeTheme] || THEMES.purple;
+      applyTheme(currentTheme);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearCustomBg() {
+    setCustomBg(null);
+    localStorage.removeItem('aighto_custombg');
+    setActiveTheme('purple');
+    localStorage.setItem('aighto_theme', 'purple');
+    applyTheme(THEMES.purple);
   }
 
   async function sendMessage(e) {
@@ -474,7 +507,7 @@ export default function Chat({ user }) {
 
   const allChannels = [...DEFAULT_CHANNELS, ...customChannels.map(c => ({ id: c.id, name: c.id, icon: '💬' }))];
   const chatTitle = view === 'channel' ? `# ${activeChannel}` : `@ ${activeDM?.username}`;
-  const theme = THEMES[activeTheme];
+  const theme = THEMES[activeTheme] || THEMES.purple;
 
   // Filter messages for search
   const filteredMessages = searchQuery.trim()
@@ -482,7 +515,13 @@ export default function Chat({ user }) {
     : messages;
 
   return (
-    <div style={{ width:'100vw', height:'100vh', display:'flex', flexDirection:'column', background:'var(--bg)', fontFamily:'var(--font)' }}
+    <div style={{ width:'100vw', height:'100vh', display:'flex', flexDirection:'column', background:'var(--bg)', fontFamily:'var(--font)',
+        ...(customBg ? {
+          backgroundImage: `url(${customBg})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        } : {}) }}
       onClick={() => { setShowStatusMenu(false); setShowReactionPicker(null); setShowEmojiPicker(false); setShowThemeMenu(false); }}>
 
       {/* WARN POPUP */}
@@ -523,9 +562,13 @@ export default function Chat({ user }) {
       )}
 
       {/* TITLE BAR */}
-      <div style={{ height:'38px', background:'var(--bg)', WebkitAppRegion:'drag',
+      <div style={{ height:'38px', WebkitAppRegion:'drag',
         display:'flex', alignItems:'center', paddingLeft:'16px', flexShrink:0,
-        borderBottom:'1px solid var(--border)', justifyContent:'space-between' }}>
+        borderBottom:'1px solid var(--border)', justifyContent:'space-between',
+        background: customBg ? 'rgba(10,8,20,0.55)' : 'var(--bg)',
+        backdropFilter: customBg ? 'blur(20px)' : 'none',
+        WebkitBackdropFilter: customBg ? 'blur(20px)' : 'none',
+      }}>
         <span style={{ fontFamily:'var(--font-head)', fontSize:'0.82rem', fontWeight:700, color:theme['--accent'] }}>Aighto</span>
         <div style={{ display:'flex', WebkitAppRegion:'no-drag' }}>
           {isOwner && (
@@ -588,7 +631,11 @@ export default function Chat({ user }) {
       <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
 
         {/* SIDEBAR */}
-        <div style={{ width:'220px', flexShrink:0, background:'var(--bg2)', borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        <div style={{ width:'220px', flexShrink:0, borderRight:'1px solid var(--border)', display:'flex', flexDirection:'column', overflow:'hidden',
+          background: customBg ? 'rgba(10,8,20,0.55)' : 'var(--bg2)',
+          backdropFilter: customBg ? 'blur(20px)' : 'none',
+          WebkitBackdropFilter: customBg ? 'blur(20px)' : 'none',
+        }}>
           <div style={{ padding:'12px 10px 6px' }}>
             <div style={{ fontSize:'0.63rem', fontWeight:700, color:'var(--text3)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'5px', paddingLeft:'8px' }}>Channels</div>
             {allChannels.map(ch => (
@@ -731,6 +778,21 @@ export default function Chat({ user }) {
                     {t.name}
                   </button>
                 ))}
+                <div style={{ height:'1px', background:'var(--border)', margin:'4px 0' }} />
+                <div style={{ fontSize:'0.62rem', color:'var(--text3)', padding:'4px 8px 2px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em' }}>Custom Background</div>
+                <label style={{ width:'100%', display:'block', background:activeTheme==='custom'?`${theme['--accent']}22`:'transparent',
+                  borderRadius:'8px', padding:'8px 10px', color:activeTheme==='custom'?'var(--accent)':'var(--text2)',
+                  fontSize:'0.82rem', cursor:'pointer', fontFamily:'var(--font)' }}>
+                  🖼️ Upload Image / GIF
+                  <input type="file" accept="image/*,.gif" onChange={handleBgUpload} style={{ display:'none' }} />
+                </label>
+                {customBg && (
+                  <button onClick={clearCustomBg}
+                    style={{ width:'100%', background:'rgba(248,113,113,0.1)', border:'none', borderRadius:'8px', padding:'8px 10px',
+                      color:'#f87171', fontSize:'0.82rem', cursor:'pointer', textAlign:'left', fontFamily:'var(--font)', marginTop:'3px' }}>
+                    ✕ Remove Background
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -739,7 +801,11 @@ export default function Chat({ user }) {
         {/* CHAT AREA */}
         <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
           {/* Header */}
-          <div style={{ height:'52px', flexShrink:0, borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', padding:'0 16px', gap:'10px' }}>
+          <div style={{ height:'52px', flexShrink:0, borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', padding:'0 16px', gap:'10px',
+            background: customBg ? 'rgba(10,8,20,0.45)' : 'transparent',
+            backdropFilter: customBg ? 'blur(20px)' : 'none',
+            WebkitBackdropFilter: customBg ? 'blur(20px)' : 'none',
+          }}>
             {view === 'dm' && activeDM && (
               <div style={{ cursor:'pointer' }} onClick={() => setProfileUser(users.find(u => u.uid===activeDM.uid)||activeDM)}>
                 <Avatar name={activeDM.username} size={30} status={users.find(u=>u.uid===activeDM.uid)?.status||'offline'} photoURL={users.find(u=>u.uid===activeDM.uid)?.photoURL} />
@@ -774,7 +840,9 @@ export default function Chat({ user }) {
 
           {/* Messages */}
           <div ref={messagesAreaRef} onScroll={handleScroll}
-            style={{ flex:1, overflowY:'auto', padding:'12px 16px', display:'flex', flexDirection:'column', gap:'1px', position:'relative' }}>
+            style={{ flex:1, overflowY:'auto', padding:'12px 16px', display:'flex', flexDirection:'column', gap:'1px', position:'relative',
+              background: customBg ? 'transparent' : 'transparent',
+            }}>
             {filteredMessages.length === 0 && (
               <div style={{ textAlign:'center', margin:'auto', color:'var(--text3)', fontSize:'0.85rem' }}>
                 <div style={{ fontSize:'2rem', marginBottom:'8px' }}>{searchQuery ? '🔍' : '👋'}</div>
@@ -829,10 +897,12 @@ export default function Chat({ user }) {
                         <button onClick={() => {setEditingMsg(null);setEditText('');}} style={{ background:'rgba(255,255,255,0.08)', border:'none', borderRadius:'8px', padding:'6px 10px', color:'var(--text2)', cursor:'pointer', fontSize:'0.78rem' }}>Cancel</button>
                       </div>
                     ) : (
-                      <div style={{ background:isMe?`linear-gradient(135deg, var(--accent), var(--accent2))`:'var(--bg3)',
+                      <div style={{ background:isMe?`linear-gradient(135deg, var(--accent), var(--accent2))`:customBg?'rgba(255,255,255,0.08)':'var(--bg3)',
                         borderRadius:isMe?'16px 16px 4px 16px':'16px 16px 16px 4px',
                         padding:'9px 14px', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.45,
-                        border:isMe?'none':'1px solid var(--border)',
+                        border:isMe?'none':customBg?'1px solid rgba(255,255,255,0.12)':'1px solid var(--border)',
+                        backdropFilter:(!isMe && customBg)?'blur(10px)':'none',
+                        WebkitBackdropFilter:(!isMe && customBg)?'blur(10px)':'none',
                         boxShadow:isMe?`0 2px 12px ${theme['--accent']}40`:'none', wordBreak:'break-word' }}>
                         {msg.text}
                         {msg.edited && <span style={{ fontSize:'0.6rem', opacity:0.5, marginLeft:'6px' }}>(edited)</span>}
@@ -926,7 +996,11 @@ export default function Chat({ user }) {
             </div>
           )}
 
-          <form onSubmit={sendMessage} style={{ padding:'10px 16px 14px', borderTop:'1px solid var(--border)', display:'flex', gap:'8px', alignItems:'center', position:'relative' }}>
+          <form onSubmit={sendMessage} style={{ padding:'10px 16px 14px', borderTop:'1px solid var(--border)', display:'flex', gap:'8px', alignItems:'center', position:'relative',
+            background: customBg ? 'rgba(10,8,20,0.5)' : 'transparent',
+            backdropFilter: customBg ? 'blur(20px)' : 'none',
+            WebkitBackdropFilter: customBg ? 'blur(20px)' : 'none',
+          }}>
             <div style={{ position:'relative' }}>
               <button type="button" onClick={e => { e.stopPropagation(); setShowEmojiPicker(!showEmojiPicker); }}
                 style={{ background:'none', border:'none', cursor:'pointer', fontSize:'1.1rem', padding:'4px', color:'var(--text3)', flexShrink:0 }}>
@@ -967,7 +1041,11 @@ export default function Chat({ user }) {
         </div>
 
         {/* ONLINE PANEL */}
-        <div style={{ width:'180px', flexShrink:0, background:'var(--bg2)', borderLeft:'1px solid var(--border)', padding:'12px 10px', overflowY:'auto' }}>
+        <div style={{ width:'180px', flexShrink:0, borderLeft:'1px solid var(--border)', padding:'12px 10px', overflowY:'auto',
+          background: customBg ? 'rgba(10,8,20,0.55)' : 'var(--bg2)',
+          backdropFilter: customBg ? 'blur(20px)' : 'none',
+          WebkitBackdropFilter: customBg ? 'blur(20px)' : 'none',
+        }}>
           <div style={{ fontSize:'0.63rem', fontWeight:700, color:'var(--text3)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:'8px', paddingLeft:'6px' }}>
             Online — {users.filter(u=>u.online&&u.status!=='offline').length+1}
           </div>
