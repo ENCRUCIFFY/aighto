@@ -853,7 +853,7 @@ export default function Chat({ user }) {
               const isMe = msg.uid === user.uid;
               const prevMsg = searchQuery ? null : filteredMessages[i-1];
               const grouped = prevMsg?.uid === msg.uid && !msg.replyTo;
-              const time = msg.createdAt?.toDate?.()?.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+              const time = msg.createdAt?.toDate?.()?.toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
               const isHighlighted = searchQuery && msg.text?.toLowerCase().includes(searchQuery.toLowerCase());
               return (
                 <div key={msg.id}

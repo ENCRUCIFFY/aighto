@@ -130,6 +130,7 @@ export default function DevPanel({ user, onClose, theme }) {
   const [motdText, setMotdText]               = useState('');
   const [patchNotes, setPatchNotes]           = useState('');
   const [patchVersion, setPatchVersion]       = useState('');
+  const [patchHistory, setPatchHistory]     = useState([]);
   const [minVersion, setMinVersion]           = useState('');
   const [modLog, setModLog]                   = useState([]);
   const [userNotes, setUserNotes]             = useState({});
@@ -151,6 +152,7 @@ export default function DevPanel({ user, onClose, theme }) {
   useEffect(() => { return onSnapshot(doc(db, 'appConfig', 'maintenance'), snap => { const d = snap.data()||{}; setMaintenanceMode(d.enabled||false); setMaintenanceMsg(d.message||''); }); }, []);
   useEffect(() => { return onSnapshot(doc(db, 'appConfig', 'motd'), snap => { const d = snap.data()||{}; setMotdEnabled(d.enabled||false); setMotdText(d.text||''); }); }, []);
   useEffect(() => { return onSnapshot(doc(db, 'appConfig', 'patchNotes'), snap => { const d = snap.data()||{}; setPatchNotes(d.notes||''); setPatchVersion(d.version||''); }); }, []);
+  useEffect(() => { return onSnapshot(query(collection(db, 'patchHistory'), orderBy('createdAt', 'desc')), snap => setPatchHistory(snap.docs.map(d => ({ id:d.id, ...d.data() })))); }, []);
   useEffect(() => { return onSnapshot(doc(db, 'appConfig', 'minVersion'), snap => setMinVersion(snap.data()?.version||'')); }, []);
   useEffect(() => { return onSnapshot(query(collection(db, 'modLog'), orderBy('timestamp', 'desc')), snap => setModLog(snap.docs.map(d => ({ id:d.id, ...d.data() })))); }, []);
   useEffect(() => { return onSnapshot(collection(db, 'userNotes'), snap => { const n={}; snap.docs.forEach(d => { n[d.id]=d.data().note||''; }); setUserNotes(n); }); }, []);
@@ -226,6 +228,11 @@ export default function DevPanel({ user, onClose, theme }) {
   async function saveConfig(docId, data) {
     try { await updateDoc(doc(db, 'appConfig', docId), data); }
     catch { await setDoc(doc(db, 'appConfig', docId), data); }
+  }
+
+  async function deletePatchEntry(id) {
+    await deleteDoc(doc(db, 'patchHistory', id));
+    showToast('Patch entry deleted');
   }
 
   async function broadcast() {
@@ -467,6 +474,29 @@ export default function DevPanel({ user, onClose, theme }) {
                   style={{ background:`linear-gradient(135deg, var(--accent), var(--accent2))`, border:'none', borderRadius:'10px', padding:'8px 18px', color:'white', fontSize:'0.82rem', fontWeight:600, cursor:'pointer', fontFamily:'var(--font)' }}>
                   + Add Entry
                 </button>
+
+                {/* Patch History List */}
+                <div style={{ marginTop:'16px', borderTop:'1px solid var(--border)', paddingTop:'12px' }}>
+                  <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:'8px' }}>Patch History ({patchHistory.length})</div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:'6px', maxHeight:'200px', overflowY:'auto' }}>
+                    {patchHistory.length === 0 && <div style={{ fontSize:'0.82rem', color:'var(--text3)' }}>No patch entries yet.</div>}
+                    {patchHistory.map(entry => (
+                      <div key={entry.id} style={{ background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'10px', padding:'10px 12px', display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'4px' }}>
+                            <span style={{ fontSize:'0.8rem', fontWeight:600, color:'var(--accent)' }}>v{entry.version}</span>
+                            <span style={{ fontSize:'0.68rem', color:'var(--text3)' }}>{formatDate(entry.createdAt)}</span>
+                          </div>
+                          <div style={{ fontSize:'0.75rem', color:'var(--text2)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{entry.notes}</div>
+                        </div>
+                        <button onClick={() => deletePatchEntry(entry.id)}
+                          style={{ background:'rgba(239,68,68,0.1)', border:'1px solid rgba(239,68,68,0.25)', borderRadius:'8px', padding:'4px 10px', cursor:'pointer', color:'#f87171', fontSize:'0.75rem', fontFamily:'var(--font)', flexShrink:0, marginLeft:'8px' }}>
+                          🗑 Delete
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
               {/* Maintenance */}
               <div style={{ background:'var(--bg)', border:`1px solid ${maintenanceMode?'rgba(251,191,36,0.3)':'var(--border)'}`, borderRadius:'14px', padding:'14px' }}>
