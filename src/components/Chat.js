@@ -152,6 +152,8 @@ export default function Chat({ user }) {
   const [showWarnPopup, setShowWarnPopup]   = useState(false);
   const [warnMessage, setWarnMessage]       = useState('');
   const isOwner = user.uid === DEV_UID;
+  const [notifications, setNotifications]   = useState([]);
+  const [showInbox, setShowInbox]           = useState(false);
   const [showSearch, setShowSearch]         = useState(false);
   const [searchQuery, setSearchQuery]       = useState('');
   const [showJumpBtn, setShowJumpBtn]       = useState(false);
@@ -293,6 +295,25 @@ export default function Chat({ user }) {
       setMaintenance({ enabled: data.enabled || false, message: data.message || '' });
     });
   }, []);
+
+  // Notifications inbox
+  useEffect(() => {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const q = query(
+      collection(db, 'users', user.uid, 'notifications'),
+      orderBy('createdAt', 'desc')
+    );
+    return onSnapshot(q, snap => {
+      const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Auto-delete items older than 30 days
+      notifs.forEach(n => {
+        if (n.createdAt?.toDate?.() < thirtyDaysAgo) {
+          deleteDoc(doc(db, 'users', user.uid, 'notifications', n.id));
+        }
+      });
+      setNotifications(notifs.filter(n => !n.createdAt || n.createdAt?.toDate?.() >= thirtyDaysAgo));
+    });
+  }, [user.uid]);
 
   // MOTD
   useEffect(() => {
@@ -465,15 +486,41 @@ export default function Chat({ user }) {
 
   async function sendFriendRequest(targetUid) {
     await updateDoc(doc(db, 'users', targetUid), { friendRequests:arrayUnion(user.uid) });
+    await addDoc(collection(db, 'users', targetUid, 'notifications'), {
+      type: 'friend_request',
+      fromUid: user.uid,
+      fromName: user.displayName || user.email,
+      fromPhoto: myData.photoURL || null,
+      read: false,
+      createdAt: serverTimestamp(),
+    });
   }
 
   async function acceptFriend(uid) {
     await updateDoc(doc(db, 'users', user.uid), { friends:arrayUnion(uid), friendRequests:arrayRemove(uid) });
     await updateDoc(doc(db, 'users', uid), { friends:arrayUnion(user.uid) });
+    // Notify the original requester that their request was accepted
+    await addDoc(collection(db, 'users', uid, 'notifications'), {
+      type: 'friend_accepted',
+      fromUid: user.uid,
+      fromName: user.displayName || user.email,
+      fromPhoto: myData.photoURL || null,
+      read: false,
+      createdAt: serverTimestamp(),
+    });
+    // Mark the friend_request notification as actioned in our own inbox
+    const myNotifs = notifications.filter(n => n.type === 'friend_request' && n.fromUid === uid);
+    for (const n of myNotifs) {
+      await deleteDoc(doc(db, 'users', user.uid, 'notifications', n.id));
+    }
   }
 
   async function declineFriend(uid) {
     await updateDoc(doc(db, 'users', user.uid), { friendRequests:arrayRemove(uid) });
+    const myNotifs = notifications.filter(n => n.type === 'friend_request' && n.fromUid === uid);
+    for (const n of myNotifs) {
+      await deleteDoc(doc(db, 'users', user.uid, 'notifications', n.id));
+    }
   }
 
   async function removeFriend(uid) {
@@ -522,7 +569,7 @@ export default function Chat({ user }) {
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
         } : {}) }}
-      onClick={() => { setShowStatusMenu(false); setShowReactionPicker(null); setShowEmojiPicker(false); setShowThemeMenu(false); }}>
+      onClick={() => { setShowStatusMenu(false); setShowReactionPicker(null); setShowEmojiPicker(false); setShowThemeMenu(false); setShowInbox(false); }}>
 
       {/* WARN POPUP */}
       {showWarnPopup && (
@@ -582,6 +629,102 @@ export default function Chat({ user }) {
               👑
             </button>
           )}
+          {/* INBOX BUTTON */}
+          <div style={{ position:'relative' }}>
+            <button onClick={e => { e.stopPropagation(); setShowInbox(!showInbox); }}
+              title="Inbox"
+              style={{ background:'transparent', border:'none', cursor:'pointer', width:'46px', height:'38px',
+                color: notifications.length > 0 ? 'var(--accent)' : 'rgba(255,255,255,0.4)',
+                fontSize:'0.95rem', display:'flex', alignItems:'center', justifyContent:'center',
+                transition:'background 0.1s', fontFamily:'var(--font)', position:'relative' }}
+              onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.08)'}
+              onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+              🔔
+              {notifications.filter(n => !n.read).length > 0 && (
+                <div style={{ position:'absolute', top:'6px', right:'6px', width:'8px', height:'8px',
+                  borderRadius:'50%', background:'#ef4444', border:'2px solid var(--bg)' }} />
+              )}
+            </button>
+            {showInbox && (
+              <div onClick={e => e.stopPropagation()} style={{
+                position:'absolute', top:'42px', right:0, width:'300px', maxHeight:'400px',
+                background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'14px',
+                boxShadow:'0 12px 40px rgba(0,0,0,0.5)', zIndex:500, overflow:'hidden',
+                display:'flex', flexDirection:'column',
+              }}>
+                <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <span style={{ fontFamily:'var(--font-head)', fontSize:'0.88rem', fontWeight:700, color:'var(--text)' }}>Inbox</span>
+                  {notifications.length > 0 && (
+                    <button onClick={async () => {
+                      for (const n of notifications) {
+                        await deleteDoc(doc(db, 'users', user.uid, 'notifications', n.id));
+                      }
+                    }} style={{ background:'none', border:'none', cursor:'pointer', fontSize:'0.72rem', color:'var(--text3)', fontFamily:'var(--font)' }}>
+                      Clear all
+                    </button>
+                  )}
+                </div>
+                <div style={{ overflowY:'auto', flex:1 }}>
+                  {notifications.length === 0 && (
+                    <div style={{ padding:'24px', textAlign:'center', color:'var(--text3)', fontSize:'0.82rem' }}>
+                      <div style={{ fontSize:'1.5rem', marginBottom:'8px' }}>🔔</div>
+                      No notifications yet
+                    </div>
+                  )}
+                  {notifications.map(n => {
+                    const timeAgo = (() => {
+                      if (!n.createdAt) return '';
+                      const d = n.createdAt.toDate ? n.createdAt.toDate() : new Date(n.createdAt);
+                      const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+                      if (diff < 60) return `${diff}s ago`;
+                      if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+                      if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+                      return `${Math.floor(diff/86400)}d ago`;
+                    })();
+                    return (
+                      <div key={n.id} style={{
+                        padding:'12px 16px', borderBottom:'1px solid var(--border)',
+                        display:'flex', alignItems:'center', gap:'10px',
+                        background: n.read ? 'transparent' : `${theme['--accent']}0a`,
+                        transition:'background 0.15s',
+                      }} onClick={async () => {
+                        await updateDoc(doc(db, 'users', user.uid, 'notifications', n.id), { read: true });
+                      }}>
+                        <div style={{ width:'36px', height:'36px', borderRadius:'50%', flexShrink:0,
+                          background: n.fromPhoto ? `url(${n.fromPhoto}) center/cover` : 'var(--accent)',
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                          fontSize:'1rem', color:'white', fontWeight:700, fontFamily:'var(--font-head)' }}>
+                          {!n.fromPhoto && (n.fromName?.[0]?.toUpperCase() || '?')}
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:'0.82rem', color:'var(--text)', lineHeight:1.4 }}>
+                            {n.type === 'friend_request' && (
+                              <><span style={{ fontWeight:600 }}>{n.fromName}</span> sent you a friend request</>
+                            )}
+                            {n.type === 'friend_accepted' && (
+                              <><span style={{ fontWeight:600 }}>{n.fromName}</span> accepted your friend request</>
+                            )}
+                          </div>
+                          <div style={{ fontSize:'0.68rem', color:'var(--text3)', marginTop:'2px' }}>{timeAgo}</div>
+                        </div>
+                        {!n.read && (
+                          <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:'var(--accent)', flexShrink:0 }} />
+                        )}
+                        <button onClick={async e => {
+                          e.stopPropagation();
+                          await deleteDoc(doc(db, 'users', user.uid, 'notifications', n.id));
+                        }} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text3)', fontSize:'0.85rem', padding:'2px', flexShrink:0 }}
+                          onMouseEnter={e => e.currentTarget.style.color='var(--danger)'}
+                          onMouseLeave={e => e.currentTarget.style.color='var(--text3)'}>
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
           {[
             { label:'─', action:'minimize', danger:false, size:'1.1rem' },
             { label:'⊡', action:'maximize', danger:false, size:'1rem'   },
