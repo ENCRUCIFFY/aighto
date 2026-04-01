@@ -8,6 +8,7 @@ import { signOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import Settings from './Settings';
 import DevPanel from './DevPanel';
+import VoiceChat from './VoiceChat';
 
 const DEV_UID = 'cqQ7tJh6h8c9Vqul4hMAZg39E0l2';
 
@@ -799,6 +800,13 @@ export default function Chat({ user }) {
                 )}
               </button>
             ))}
+          </div>
+
+          <div style={{ height:'1px', background:'var(--border)', margin:'4px 10px' }} />
+
+          {/* VOICE CHANNELS */}
+          <div style={{ padding:'6px 10px' }}>
+            <VoiceChat user={user} myData={myData} theme={theme} />
           </div>
 
           <div style={{ height:'1px', background:'var(--border)', margin:'4px 10px' }} />
