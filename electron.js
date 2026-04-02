@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, desktopCapturer, session } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const log = require('electron-log');
@@ -117,6 +117,28 @@ function createWindow() {
   // Discord RPC channel update
   ipcMain.on('discord-update', (_, { channel, state }) => {
     setDiscordActivity({ channel, state });
+  });
+
+  // Screen capture sources for Electron
+  ipcMain.handle('get-screen-sources', async () => {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 180 },
+    });
+    return sources.map(s => ({
+      id: s.id,
+      name: s.name,
+      thumbnail: s.thumbnail.toDataURL(),
+    }));
+  });
+
+  // Allow screen capture in packaged app
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'media' || permission === 'display-capture') {
+      callback(true);
+    } else {
+      callback(false);
+    }
   });
 }
 

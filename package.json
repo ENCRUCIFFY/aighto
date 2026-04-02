@@ -1,6 +1,6 @@
 {
   "name": "aighto",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Aighto - Chat with your friends",
   "main": "electron.js",
   "homepage": "./",
