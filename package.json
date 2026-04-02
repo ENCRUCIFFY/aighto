@@ -11,6 +11,7 @@
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
+    "agora-rtc-sdk-ng": "^4.24.3",
     "discord-rpc": "^4.0.1",
     "electron-log": "^5.1.2",
     "electron-updater": "^6.1.7",

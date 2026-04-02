@@ -42,7 +42,7 @@ export default function VoiceChat({ user, myData, theme }) {
   const [speakingUsers, setSpeakingUsers] = useState({});
   const [channelUsers, setChannelUsers]   = useState({});
   const [volumes, setVolumes]             = useState({});
-  const [hoveredUser, setHoveredUser]     = useState(null);
+  const [contextMenu, setContextMenu]     = useState(null); // { uid, name, x, y }
   const [remoteUsers, setRemoteUsers]     = useState({});
 
   const clientRef     = useRef(null);
@@ -245,9 +245,13 @@ export default function VoiceChat({ user, myData, theme }) {
               <div style={{ paddingLeft:'28px', marginBottom:'4px' }}>
                 {userList.map(p => (
                   <div key={p.uid}
-                    onMouseEnter={() => p.uid !== user.uid && setHoveredUser(p.uid)}
-                    onMouseLeave={() => setHoveredUser(null)}
-                    style={{ display:'flex', alignItems:'center', gap:'6px', padding:'3px 6px', borderRadius:'6px', position:'relative' }}>
+                    onContextMenu={e => {
+                      if (p.uid === user.uid) return;
+                      e.preventDefault();
+                      setContextMenu({ uid: p.uid, name: p.username, x: e.clientX, y: e.clientY });
+                    }}
+                    style={{ display:'flex', alignItems:'center', gap:'6px', padding:'3px 6px', borderRadius:'6px',
+                      cursor: p.uid !== user.uid ? 'context-menu' : 'default' }}>
                     <Avatar name={p.username} size={18} photoURL={p.photoURL}
                       speaking={speakingUsers[p.uid] || p.speaking} />
                     <span style={{ fontSize:'0.72rem', color: p.muted ? 'var(--text3)' : 'var(--text2)',
@@ -255,22 +259,6 @@ export default function VoiceChat({ user, myData, theme }) {
                       {p.username}
                     </span>
                     {p.muted && <span style={{ fontSize:'0.6rem' }}>🔇</span>}
-
-                    {/* Volume slider on hover — only for others */}
-                    {hoveredUser === p.uid && p.uid !== user.uid && (
-                      <div style={{ position:'absolute', left:'100%', top:'50%', transform:'translateY(-50%)',
-                        background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'10px',
-                        padding:'8px 10px', zIndex:100, boxShadow:'0 4px 16px rgba(0,0,0,0.4)',
-                        display:'flex', alignItems:'center', gap:'8px', width:'140px', marginLeft:'4px' }}>
-                        <span style={{ fontSize:'0.7rem' }}>🔊</span>
-                        <input type="range" min={0} max={200} value={volumes[p.uid] ?? 100}
-                          onChange={e => setUserVolume(p.uid, parseInt(e.target.value))}
-                          style={{ flex:1, accentColor:'var(--accent)', cursor:'pointer' }} />
-                        <span style={{ fontSize:'0.65rem', color:'var(--text3)', minWidth:'28px' }}>
-                          {volumes[p.uid] ?? 100}%
-                        </span>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -306,6 +294,37 @@ export default function VoiceChat({ user, myData, theme }) {
                 background:'rgba(239,68,68,0.2)', color:'#f87171', fontSize:'0.72rem',
                 fontFamily:'var(--font)', fontWeight:600 }}>
               Leave
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Right-click context menu */}
+      {contextMenu && (
+        <div onClick={() => setContextMenu(null)}
+          style={{ position:'fixed', inset:0, zIndex:998 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ position:'fixed', left: contextMenu.x, top: contextMenu.y,
+              background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'12px',
+              padding:'12px 14px', zIndex:999, boxShadow:'0 8px 30px rgba(0,0,0,0.5)',
+              minWidth:'180px' }}>
+            <div style={{ fontSize:'0.78rem', fontWeight:600, color:'var(--text)', marginBottom:'10px' }}>
+              🔊 {contextMenu.name}
+            </div>
+            <div style={{ fontSize:'0.68rem', color:'var(--text3)', marginBottom:'6px' }}>Volume</div>
+            <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+              <input type="range" min={0} max={200} value={volumes[contextMenu.uid] ?? 100}
+                onChange={e => setUserVolume(contextMenu.uid, parseInt(e.target.value))}
+                style={{ flex:1, accentColor:'var(--accent)', cursor:'pointer' }} />
+              <span style={{ fontSize:'0.72rem', color:'var(--accent2)', minWidth:'36px', textAlign:'right' }}>
+                {volumes[contextMenu.uid] ?? 100}%
+              </span>
+            </div>
+            <button onClick={() => setContextMenu(null)}
+              style={{ marginTop:'10px', width:'100%', background:`${theme['--accent']}22`,
+                border:`1px solid ${theme['--accent']}44`, borderRadius:'8px', padding:'6px',
+                color:'var(--accent2)', fontSize:'0.75rem', cursor:'pointer', fontFamily:'var(--font)' }}>
+              Done
             </button>
           </div>
         </div>
