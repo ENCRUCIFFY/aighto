@@ -51,7 +51,6 @@ export default function VoiceChat({ user, myData, theme }) {
   const [screenParticipants, setScreenParticipants] = useState({});
 
   const clientRef        = useRef(null);
-  const screenClientRef  = useRef(null);
   const localTrackRef    = useRef(null);
   const screenTrackRef   = useRef(null);
   const channelRef       = useRef(null);
@@ -99,7 +98,6 @@ export default function VoiceChat({ user, myData, theme }) {
     try { localTrackRef.current?.stop(); localTrackRef.current?.close(); } catch {}
     try { screenTrackRef.current?.stop(); screenTrackRef.current?.close(); } catch {}
     try { await clientRef.current?.leave(); } catch {}
-    try { await screenClientRef.current?.leave(); } catch {}
     if (channelRef.current) {
       await deleteDoc(doc(db, 'voiceChannels', channelRef.current, 'participants', user.uid)).catch(() => {});
       await deleteDoc(doc(db, 'voiceChannels', channelRef.current, 'screens', user.uid)).catch(() => {});
@@ -107,7 +105,6 @@ export default function VoiceChat({ user, myData, theme }) {
     localTrackRef.current = null;
     screenTrackRef.current = null;
     clientRef.current = null;
-    screenClientRef.current = null;
     channelRef.current = null;
     remoteUsersRef.current = {};
   }
@@ -224,10 +221,9 @@ export default function VoiceChat({ user, myData, theme }) {
   }
 
   async function stopScreenShare() {
+    try { await clientRef.current?.unpublish(screenTrackRef.current); } catch {}
     try { screenTrackRef.current?.stop(); screenTrackRef.current?.close(); } catch {}
-    try { await screenClientRef.current?.leave(); } catch {}
     screenTrackRef.current = null;
-    screenClientRef.current = null;
     setSharing(false);
     await deleteDoc(doc(db, 'voiceChannels', activeChannel, 'screens', user.uid)).catch(() => {});
   }
@@ -273,10 +269,8 @@ export default function VoiceChat({ user, myData, theme }) {
         screenTrack = await AgoraRTC.createScreenVideoTrack({ encoderConfig: '1080p_1' }, 'disable');
       }
 
-      const screenClient = AgoraRTC.createClient({ mode:'rtc', codec:'vp8' });
-      screenClientRef.current = screenClient;
-      await screenClient.join(AGORA_APP_ID, `${activeChannel}-screen`, null, null);
-      await screenClient.publish(screenTrack);
+      if (!clientRef.current) throw new Error('Not joined to a voice channel');
+      await clientRef.current.publish(screenTrack);
       screenTrackRef.current = screenTrack;
 
       screenTrack.on?.('track-ended', () => stopScreenShare());
